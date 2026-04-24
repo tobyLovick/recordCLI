@@ -34,8 +34,6 @@ def main():
                         help="Name/tag for this note (overrides any spoken name)")
     parser.add_argument("--continue", dest="continue_file", nargs="?", const="",
                         help="Append to an existing note (path, or omit to pick interactively)")
-    parser.add_argument("--import", dest="do_import", action="store_true",
-                        help="Import new recordings from Google Drive")
     parser.add_argument("--transcribe", type=Path, default=None, metavar="FILE",
                         help="Transcribe an existing audio file (m4a, mp3, wav, etc.)")
     args = parser.parse_args()
@@ -55,15 +53,6 @@ def main():
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
         args.output.mkdir(parents=True, exist_ok=True)
         _file_and_report(text, [], args, timestamp)
-        return
-
-    if args.do_import:
-        try:
-            from . import gdrive as _gdrive_check  # noqa: F401
-        except ImportError:
-            print("--import is not available in this installation.")
-            return
-        _run_import(args)
         return
 
     if args.continue_file is not None:
@@ -151,80 +140,6 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
 
     _file_and_report(transcript, audio_chunks, args, timestamp)
 
-
-
-def _run_import(args):
-    import questionary
-    import tempfile
-    from . import gdrive
-
-    print("Connecting to Google Drive...")
-    try:
-        service = gdrive.authenticate()
-    except FileNotFoundError as e:
-        print(e)
-        return
-
-    files = gdrive.list_new_files(service, folder_name=gdrive.DRIVE_FOLDER)
-    if not files:
-        print("No new files to import.")
-        return
-
-    print(f"Found {len(files)} new file(s).\n")
-
-    if args.model is None:
-        args.model = "medium"
-    model = None  # load lazily — only if audio files need transcribing
-
-    for f in files:
-        name = f["name"]
-        suffix = Path(name).suffix.lower()
-        print(f"─── {name} ───")
-
-        if suffix in gdrive.TEXT_EXTENSIONS:
-            with tempfile.NamedTemporaryFile(suffix=".txt", delete=False) as tmp:
-                tmp_path = Path(tmp.name)
-            gdrive.download_file(service, f["id"], tmp_path)
-            transcript = tmp_path.read_text()
-            tmp_path.unlink()
-            # show preview
-            lines = [l for l in transcript.splitlines() if l.strip()][:3]
-            print("\n".join(lines))
-
-        elif suffix in gdrive.AUDIO_EXTENSIONS:
-            if model is None:
-                model = transcriber.load_model(args.model)
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-                tmp_path = Path(tmp.name)
-            print("Downloading audio...")
-            gdrive.download_file(service, f["id"], tmp_path)
-            print("Transcribing...")
-            transcript = transcriber.transcribe(model, str(tmp_path), beam_size=5)
-            tmp_path.unlink()
-            lines = [l for l in transcript.splitlines() if l.strip()][:3]
-            print("\n".join(lines))
-        else:
-            print(f"  Skipping (unsupported type: {suffix})")
-            continue
-
-        print()
-        note_name = questionary.text("Name this note (blank to skip):").ask()
-        if note_name is None:
-            break
-        if not note_name.strip():
-            print("  Skipped.\n")
-            gdrive.mark_imported(f["id"])
-            continue
-
-        timestamp = f["createdTime"][:16].replace("T", "_").replace(":", "-")
-        saved = filer.save_transcript(
-            filer.clean_transcript(transcript),
-            filer.slugify(note_name),
-            args.output,
-            timestamp
-        )
-        gdrive.mark_imported(f["id"])
-        print(f"  Saved → {saved}\n")
 
 
 def _pick_continue_file(path, notes_dir):
