@@ -36,8 +36,8 @@ pipx ensurepath   # adds pipx bin dir to PATH, then restart your terminal
 Then install WhisperLogs:
 
 ```bash
-git clone https://github.com/lovicktoby/whisperlogs
-cd whisperlogs
+git clone https://github.com/lovicktoby/recordCLI
+cd recordCLI
 pipx install -e .
 ```
 

@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/lovicktoby/whisperlogs"
+Repository = "https://github.com/lovicktoby/recordCLI"
 
 [project.scripts]
 record = "whisperlogs.cli:main"
