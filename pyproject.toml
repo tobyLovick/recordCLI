@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "whisperlogs"
+version = "0.1.0"
+description = "Voice notes from the terminal — transcribed by Whisper, auto-filed by tag"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Toby Lovick" }]
+requires-python = ">=3.9"
+dependencies = [
+    "faster-whisper",
+    "sounddevice",
+    "numpy",
+    "soundfile",
+    "pydub",
+    "questionary",
+]
+
+[project.urls]
+Repository = "https://github.com/lovicktoby/whisperlogs"
+
+[project.scripts]
+record = "whisperlogs.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

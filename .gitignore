@@ -1,0 +1,34 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# personal Google Drive import (not in public repo)
+whisperlogs/gdrive.py
+
+# local Claude Code settings (device index, personal paths)
+.claude/settings.local.json
+
+# Google Drive auth tokens
+~/.whisperlogs_gdrive_creds.json
+~/.whisperlogs_gdrive_token.pkl
+~/.whisperlogs_imported.txt
+
+# Whisper model cache
+.cache/
+
+# recorded audio scratch files
+/tmp/bench_*.wav
+
+# personal notes and audio
+notes/
+*.m4a
+*.mp3
+*.wav
+
+# pipx venv
+venv/
