@@ -1,6 +1,6 @@
 #!/bin/bash
-CURRENT="$HOME/WhisperLogs/notes/current.txt"
-OFFSET_FILE="$HOME/.whisperlogs_offset"
+CURRENT="$HOME/recordCLI/notes/current.txt"
+OFFSET_FILE="$HOME/.recordcli_offset"
 
 [ -f "$CURRENT" ] || exit 0
 

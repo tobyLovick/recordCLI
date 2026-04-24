@@ -1,4 +1,4 @@
-# WhisperLogs — Claude Code notes
+# recordCLI — Claude Code notes
 
 ## Install & run
 
@@ -11,10 +11,10 @@ After editing source, reinstall with `pipx install . --force`.
 
 ## Structure
 
-- `whisperlogs/cli.py` — argument parsing, recording modes, import flow
-- `whisperlogs/recorder.py` — audio capture, silence detection, chunking
-- `whisperlogs/transcriber.py` — faster-whisper wrapper
-- `whisperlogs/filer.py` — naming, slugifying, saving transcripts
+- `recordcli/cli.py` — argument parsing, recording modes, import flow
+- `recordcli/recorder.py` — audio capture, silence detection, chunking
+- `recordcli/transcriber.py` — faster-whisper wrapper
+- `recordcli/filer.py` — naming, slugifying, saving transcripts
 - `transcript-hook.sh` — Claude Code hook (delta-injects live transcript)
 
 ## Key defaults
@@ -24,7 +24,7 @@ After editing source, reinstall with `pipx install . --force`.
 - Normal mode: medium model, beam=5, vad_filter=True
 - Liveupdate mode: small model, beam=1, vad_filter=False
 - Max chunk: 30s (forces flush on continuous speech)
-- Notes dir: `~/WhisperLogs/notes/`
+- Notes dir: `~/recordCLI/notes/`
 
 ## Hook setup (already configured globally)
 

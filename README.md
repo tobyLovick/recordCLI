@@ -1,4 +1,4 @@
-# WhisperLogs
+# recordCLI
 
 A terminal voice notes tool. Speak, stop, get a tagged text file. Powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
 
@@ -33,10 +33,10 @@ pip install pipx
 pipx ensurepath   # adds pipx bin dir to PATH, then restart your terminal
 ```
 
-Then install WhisperLogs:
+Then install recordCLI:
 
 ```bash
-git clone https://github.com/lovicktoby/recordCLI
+git clone https://github.com/tobyLovick/recordCLI
 cd recordCLI
 pipx install -e .
 ```
@@ -86,7 +86,7 @@ or
 
 > *"this should be called kepler orbits end name"*
 
-The note gets filed under `~/WhisperLogs/notes/chapter-three/`. If no name is found, it goes to `~/WhisperLogs/notes/untagged/`.
+The note gets filed under `~/recordCLI/notes/chapter-three/`. If no name is found, it goes to `~/recordCLI/notes/untagged/`.
 
 The `--name` flag overrides any spoken name.
 
@@ -102,7 +102,7 @@ The `--name` flag overrides any spoken name.
 
 ## Live context with Claude Code
 
-In `--liveupdate` mode, transcription is written to `~/WhisperLogs/notes/current.txt` in real time. A Claude Code hook can inject new content into your conversation automatically whenever you send a message.
+In `--liveupdate` mode, transcription is written to `~/recordCLI/notes/current.txt` in real time. A Claude Code hook can inject new content into your conversation automatically whenever you send a message.
 
 Add to `~/.claude/settings.json`:
 
@@ -114,7 +114,7 @@ Add to `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "/path/to/whisperlogs/transcript-hook.sh",
+            "command": "/path/to/recordCLI/transcript-hook.sh",
             "timeout": 5
           }
         ]
@@ -145,7 +145,7 @@ Set `--silence` to roughly 3× your noise RMS.
 ## Notes structure
 
 ```
-~/WhisperLogs/notes/
+~/recordCLI/notes/
 ├── my-topic/
 │   └── 2026-04-24_14-32_my-topic.txt
 ├── another-topic/

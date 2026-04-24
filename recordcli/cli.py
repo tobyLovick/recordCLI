@@ -7,7 +7,7 @@ from . import recorder as rec_module
 from . import transcriber
 from . import filer
 
-DEFAULT_NOTES_DIR = Path.home() / "WhisperLogs" / "notes"
+DEFAULT_NOTES_DIR = Path.home() / "recordCLI" / "notes"
 
 
 def main():
@@ -79,7 +79,7 @@ def main():
 def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_filter=False):
     tmp_path = args.output / f".tmp_{timestamp}.txt"
     current_path = args.output / "current.txt"
-    offset_path = Path.home() / ".whisperlogs_offset"
+    offset_path = Path.home() / ".recordcli_offset"
     audio_chunks = []
 
     current_path.unlink(missing_ok=True)

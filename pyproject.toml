@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "whisperlogs"
+name = "recordcli"
 version = "0.1.0"
 description = "Voice notes from the terminal — transcribed by Whisper, auto-filed by tag"
 readme = "README.md"
@@ -20,10 +20,10 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/lovicktoby/recordCLI"
+Repository = "https://github.com/tobyLovick/recordCLI"
 
 [project.scripts]
-record = "whisperlogs.cli:main"
+record = "recordcli.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

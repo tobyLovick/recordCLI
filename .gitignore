@@ -8,7 +8,7 @@ build/
 venv/
 
 # personal Google Drive import (not in public repo)
-whisperlogs/gdrive.py
+recordcli/gdrive.py
 
 # local Claude Code settings (device index, personal paths)
 .claude/settings.local.json
