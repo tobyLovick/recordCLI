@@ -1,6 +1,9 @@
 # recordCLI
 
-A terminal voice notes tool. Speak, stop, get a tagged text file. Powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
+**N.B. This repo exists for me to share a tool I've built for myself with some colleagues. I'd highly recommend tweaking it's functionality to make it as "low-friction" for you to use as possible, as your workflow may be different to mine. I just wanted to make notes with my voice without an external cloud-based service reading my thoughts and costing me money**
+
+
+A terminal voice notes tool, which transcribes on your local hardware! Speak, stop, get a tagged text file. Powered by [faster-whisper](https://github.com/SYSTRAN/faster-whisper).
 
 ```
 record --liveupdate
@@ -26,12 +29,7 @@ ffmpeg is only needed if you use `--savemp3`.
 
 ## Installation
 
-Install [pipx](https://pipx.pypa.io) if you don't have it — it installs the `record` command globally without touching your system Python:
-
-```bash
-pip install pipx
-pipx ensurepath   # adds pipx bin dir to PATH, then restart your terminal
-```
+I'd recommend installing with [pipx](https://pipx.pypa.io) so this command is global.
 
 Clone and install with the `-e` (editable) flag:
 
@@ -42,8 +40,6 @@ pipx install -e .
 ```
 
 **Use `-e`.** You'll almost certainly want to tweak defaults — silence threshold, model size, audio device — and editable mode means any edit to the source takes effect immediately without reinstalling.
-
-`record` is now available in any terminal, in any directory.
 
 Whisper model weights download automatically on first use and cache in `~/.cache/huggingface/`.
 
@@ -98,7 +94,7 @@ The `--name` flag overrides any spoken name.
 | Transcription | on silence / every 30s | on silence / every 30s |
 | VAD filter | yes | yes |
 | Beam size | 5 | 1 |
-| Best for | longer notes, accuracy | live context, meetings |
+| Best for | longer notes, accuracy | live context for porting into a REPL |
 
 ## Live context with Claude Code
 
@@ -136,6 +132,8 @@ If you record on a mobile app that syncs to Drive (e.g. Easy Voice Recorder), yo
 
 The `transcriber` and `filer` modules are designed to work standalone — no recording hardware needed.
 
+On my local branch I have record --import set to this functionality, but you're not having my API key!
+
 ## Calibrating the silence threshold
 
 Background noise varies by environment. The default threshold (`--silence 0.1`) works for a quiet room. If transcription triggers on background noise, raise it; if speech isn't being detected, lower it.
@@ -151,15 +149,4 @@ print(f'Noise RMS: {float(np.sqrt(np.mean(audio**2))):.4f}')
 ```
 
 Set `--silence` to roughly 3× your noise RMS.
-
-## Notes structure
-
-```
-~/recordCLI/notes/
-├── my-topic/
-│   └── 2026-04-24_14-32_my-topic.txt
-├── another-topic/
-│   └── 2026-04-24_15-00_another-topic.txt
-└── untagged/
-    └── 2026-04-24_16-00.txt
 ```
