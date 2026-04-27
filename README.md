@@ -126,6 +126,16 @@ Add to `~/.claude/settings.json`:
 
 Then run `record --liveupdate` in one terminal and Claude Code in another. Claude sees what you say as you say it, without you having to paste anything.
 
+## Transcribing from Google Drive
+
+If you record on a mobile app that syncs to Drive (e.g. Easy Voice Recorder), you can pull recordings in automatically:
+
+1. Enable the Google Drive API in Google Cloud Console and download OAuth2 credentials
+2. Write a short script using `google-api-python-client` to list and download new files from your Drive folder
+3. Pass each downloaded file to `transcriber.transcribe_file(model, path)` and save the result with `filer.save_transcript()`
+
+The `transcriber` and `filer` modules are designed to work standalone — no recording hardware needed.
+
 ## Calibrating the silence threshold
 
 Background noise varies by environment. The default threshold (`--silence 0.1`) works for a quiet room. If transcription triggers on background noise, raise it; if speech isn't being detected, lower it.
