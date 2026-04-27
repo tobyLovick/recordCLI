@@ -47,8 +47,7 @@ def main():
         if args.model is None:
             args.model = "medium"
         model = transcriber.load_model(args.model)
-        print(f"Transcribing {args.transcribe}...")
-        text = transcriber.transcribe(model, str(args.transcribe), beam_size=5, vad_filter=True)
+        text = transcriber.transcribe_file(model, str(args.transcribe))
         print(text)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
         args.output.mkdir(parents=True, exist_ok=True)
@@ -71,7 +70,7 @@ def main():
     print("\nRecording... Press Ctrl+C to stop.\n")
 
     if args.liveupdate:
-        _run_chunked(rec, model, args, timestamp, beam_size=1, context_len=100, live=True, vad_filter=False)
+        _run_chunked(rec, model, args, timestamp, beam_size=1, context_len=100, live=True, vad_filter=True)
     else:
         _run_chunked(rec, model, args, timestamp, beam_size=5, context_len=200, live=False, vad_filter=True)
 

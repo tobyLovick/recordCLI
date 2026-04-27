@@ -96,7 +96,7 @@ The `--name` flag overrides any spoken name.
 |---|---|---|
 | Model default | `medium` | `small` |
 | Transcription | on silence / every 30s | on silence / every 30s |
-| VAD filter | yes (skips silent chunks) | no (lower latency) |
+| VAD filter | yes | yes |
 | Beam size | 5 | 1 |
 | Best for | longer notes, accuracy | live context, meetings |
 

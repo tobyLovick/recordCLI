@@ -17,6 +17,7 @@ dependencies = [
     "soundfile",
     "pydub",
     "questionary",
+    "tqdm",
 ]
 
 [project.urls]
