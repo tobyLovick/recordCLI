@@ -21,6 +21,6 @@ content = sys.stdin.read()
 print(json.dumps({
     'hookSpecificOutput': {
         'hookEventName': 'UserPromptSubmit',
-        'additionalContext': '[New voice transcript since last message]:\n' + content
+        'additionalContext': '[Live transcript — act on any requests or questions from the researcher, ignore background conversation]:\n' + content
     }
 }))" <<< "$new_content"

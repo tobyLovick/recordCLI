@@ -1,4 +1,7 @@
 import argparse
+import os
+import signal
+import subprocess
 import numpy as np
 from datetime import datetime
 from pathlib import Path
@@ -6,6 +9,13 @@ from pathlib import Path
 from . import recorder as rec_module
 from . import transcriber
 from . import filer
+
+_PID_FILE = Path.home() / ".recordcli_pid"
+
+
+def _ping_claude():
+    subprocess.run(["notify-send", "-t", "3000", "recordCLI", "Chunk processed"],
+                   capture_output=True)
 
 DEFAULT_NOTES_DIR = Path.home() / "recordCLI" / "notes"
 
@@ -36,6 +46,10 @@ def main():
                         help="Append to an existing note (path, or omit to pick interactively)")
     parser.add_argument("--transcribe", type=Path, default=None, metavar="FILE",
                         help="Transcribe an existing audio file (m4a, mp3, wav, etc.)")
+    parser.add_argument("--import", dest="do_import", action="store_true",
+                        help="Download and transcribe new recordings from Google Drive")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Suppress progress output (useful when run by Claude)")
     args = parser.parse_args()
 
     if args.listdevices:
@@ -43,12 +57,19 @@ def main():
         print(sd.query_devices())
         return
 
+    if args.do_import:
+        if args.model is None:
+            args.model = "medium"
+        args.output.mkdir(parents=True, exist_ok=True)
+        _run_import(args, quiet=args.quiet)
+        return
+
     if args.transcribe:
         if args.model is None:
             args.model = "medium"
         model = transcriber.load_model(args.model)
         print(f"Transcribing {args.transcribe}...")
-        text = transcriber.transcribe(model, str(args.transcribe), beam_size=5, vad_filter=True)
+        text = transcriber.transcribe_file(model, str(args.transcribe))
         print(text)
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
         args.output.mkdir(parents=True, exist_ok=True)
@@ -71,7 +92,7 @@ def main():
     print("\nRecording... Press Ctrl+C to stop.\n")
 
     if args.liveupdate:
-        _run_chunked(rec, model, args, timestamp, beam_size=1, context_len=100, live=True, vad_filter=False)
+        _run_chunked(rec, model, args, timestamp, beam_size=1, context_len=100, live=True, vad_filter=True)
     else:
         _run_chunked(rec, model, args, timestamp, beam_size=5, context_len=200, live=False, vad_filter=True)
 
@@ -85,6 +106,9 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
     current_path.unlink(missing_ok=True)
     offset_path.write_text("0")
 
+    _PID_FILE.write_text(str(os.getpid()))
+    signal.signal(signal.SIGUSR1, lambda sig, frame: rec_module.trigger_flush())
+
     rec.start(device=args.device)
     if live:
         print(f"[live] Writing to {tmp_path}")
@@ -92,7 +116,7 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
 
     transcript_so_far = ""
     try:
-        for chunk in rec.iter_speech_chunks():
+        for chunk, manual in rec.iter_speech_chunks():
             audio_chunks.append(chunk)
             text = transcriber.transcribe(model, chunk,
                                           context=transcript_so_far[-context_len:],
@@ -106,10 +130,13 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
                 with open(current_path, "a") as f:
                     f.write(line)
                 print(text.strip(), end=" ", flush=True)
+                if live and manual:
+                    _ping_claude()
     except KeyboardInterrupt:
         pass
     finally:
         rec.stop()
+        _PID_FILE.unlink(missing_ok=True)
         remaining = rec.get_all_audio()
         if len(remaining) > 1000:
             text = transcriber.transcribe(model, remaining,
@@ -140,6 +167,66 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
 
     _file_and_report(transcript, audio_chunks, args, timestamp)
 
+
+
+def _run_import(args, quiet=False):
+    from . import gdrive
+    import tempfile
+
+    def log(*a, **kw):
+        if not quiet:
+            print(*a, **kw)
+
+    log("Connecting to Google Drive...")
+    service = gdrive.authenticate()
+
+    files = gdrive.list_new_files(service, folder_name=gdrive.DRIVE_FOLDER)
+    if not files:
+        log("No new files to import.")
+        return
+
+    log(f"Found {len(files)} new file(s).")
+    model = transcriber.load_model(args.model, quiet=quiet)
+
+    for i, f in enumerate(files, 1):
+        name = f["name"]
+        ext = Path(name).suffix.lower()
+        if ext not in gdrive.AUDIO_EXTENSIONS:
+            log(f"Skipping {name} (not audio)")
+            gdrive.mark_imported(f["id"])
+            continue
+
+        log(f"\n[{i}/{len(files)}] {name}")
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+
+        try:
+            gdrive.download_file(service, f["id"], tmp_path)
+            text = transcriber.transcribe_file(model, str(tmp_path), quiet=quiet)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+        if not text.strip():
+            log("  No speech detected, skipping.")
+            gdrive.mark_imported(f["id"])
+            continue
+
+        spoken_name = filer.extract_name(text, override=args.name)
+        if spoken_name:
+            note_name = spoken_name
+            log(f"  Name: {note_name}")
+        else:
+            if quiet:
+                note_name = Path(name).stem
+            else:
+                preview = " ".join(text.split()[:40])
+                print(f"  Preview: {preview}...")
+                note_name = input(f"  Name this note (Enter for '{Path(name).stem}'): ").strip() or Path(name).stem
+        created = f.get("createdTime", "")
+        timestamp = created[:16].replace("T", "_").replace(":", "-") if created else datetime.now().strftime("%Y-%m-%d_%H-%M")
+        final_path = filer.save_transcript(text, note_name, args.output, timestamp)
+        print(f"Saved: {final_path}")
+        gdrive.mark_imported(f["id"])
 
 
 def _pick_continue_file(path, notes_dir):
