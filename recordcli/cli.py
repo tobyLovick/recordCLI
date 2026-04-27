@@ -26,7 +26,7 @@ def main():
                         help=f"Directory to save notes (default: {DEFAULT_NOTES_DIR})")
     parser.add_argument("--silence", type=float, default=0.1,
                         help="RMS silence threshold (default: 0.1)")
-    parser.add_argument("--device", type=int, default=8,
+    parser.add_argument("--device", type=int, default=None,
                         help="Audio input device index (run 'record --listdevices' to see options)")
     parser.add_argument("--listdevices", action="store_true",
                         help="List available audio input devices and exit")

@@ -26,14 +26,14 @@ ffmpeg is only needed if you use `--savemp3`.
 
 ## Installation
 
-Install [pipx](https://pipx.pypa.io) if you don't have it — it makes the `record` command available everywhere without polluting your system Python:
+Install [pipx](https://pipx.pypa.io) if you don't have it — it installs the `record` command globally without touching your system Python:
 
 ```bash
 pip install pipx
 pipx ensurepath   # adds pipx bin dir to PATH, then restart your terminal
 ```
 
-Then install recordCLI:
+Clone and install with the `-e` (editable) flag:
 
 ```bash
 git clone https://github.com/tobyLovick/recordCLI
@@ -41,7 +41,7 @@ cd recordCLI
 pipx install -e .
 ```
 
-The `-e` (editable) flag means changes to the source are picked up immediately without reinstalling — useful if you want to tweak the code.
+**Use `-e`.** You'll almost certainly want to tweak defaults — silence threshold, model size, audio device — and editable mode means any edit to the source takes effect immediately without reinstalling.
 
 `record` is now available in any terminal, in any directory.
 
