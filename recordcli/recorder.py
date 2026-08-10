@@ -1,7 +1,10 @@
 import queue
+import subprocess
 import threading
 import sounddevice as sd
 import numpy as np
+
+from . import tapaudio
 
 SAMPLERATE = 16000
 CHANNELS = 1
@@ -24,21 +27,54 @@ class AudioRecorder:
         self._q = queue.Queue()
         self._recording = False
         self._stream = None
+        self._tap_proc = None
+        self._tap_thread = None
 
     def _callback(self, indata, frames, time, status):
         self._q.put(indata[:, 0].copy())
 
     def start(self, device=None):
         self._recording = True
-        self._stream = sd.InputStream(
-            samplerate=SAMPLERATE,
-            channels=CHANNELS,
-            dtype="float32",
-            blocksize=BLOCKSIZE,
-            device=device,
-            callback=self._callback,
+        if device == tapaudio.DEVICE_NAME:
+            self._start_tap()
+        else:
+            self._stream = sd.InputStream(
+                samplerate=SAMPLERATE,
+                channels=CHANNELS,
+                dtype="float32",
+                blocksize=BLOCKSIZE,
+                device=device,
+                callback=self._callback,
+            )
+            self._stream.start()
+
+    def _start_tap(self):
+        tapaudio.ensure_running()
+        self._tap_proc = subprocess.Popen(
+            [
+                "pw-record",
+                "--target", tapaudio.SOURCE_TARGET,
+                "--rate", str(SAMPLERATE),
+                "--channels", str(CHANNELS),
+                "--format", "s16",
+                "-",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
         )
-        self._stream.start()
+        bytes_per_block = BLOCKSIZE * CHANNELS * 2  # s16 = 2 bytes/sample
+
+        def _read_loop():
+            proc = self._tap_proc
+            while self._recording and proc.poll() is None:
+                data = proc.stdout.read(bytes_per_block)
+                if not data:
+                    break
+                pcm16 = np.frombuffer(data, dtype="int16")
+                self._q.put((pcm16.astype("float32")) / 32768.0)
+
+        self._tap_thread = threading.Thread(target=_read_loop, daemon=True)
+        self._tap_thread.start()
 
     def stop(self):
         self._recording = False
@@ -46,6 +82,13 @@ class AudioRecorder:
             self._stream.stop()
             self._stream.close()
             self._stream = None
+        if self._tap_proc:
+            self._tap_proc.terminate()
+            self._tap_proc.wait(timeout=2)
+            self._tap_proc = None
+        if self._tap_thread:
+            self._tap_thread.join(timeout=2)
+            self._tap_thread = None
 
     def get_all_audio(self):
         chunks = []

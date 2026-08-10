@@ -2,6 +2,7 @@ import argparse
 import os
 import signal
 import subprocess
+import time
 import numpy as np
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,8 @@ from pathlib import Path
 from . import recorder as rec_module
 from . import transcriber
 from . import filer
+from . import tapaudio
+from . import trimmer
 
 _PID_FILE = Path.home() / ".recordcli_pid"
 
@@ -27,17 +30,30 @@ def main():
     )
     parser.add_argument("--liveupdate", action="store_true",
                         help="Low-latency mode: small model, beam=1, fast chunking")
+    parser.add_argument("--fast", action="store_true",
+                        help="Use beam=1 for near real-time decoding, without --liveupdate's "
+                             "hook-visible current.txt writes/notifications")
+    parser.add_argument("--record", action="store_true",
+                        help="Just record to mp3, no transcription — no model load, no CPU "
+                             "load while recording. Transcribe later with --transcribe")
     parser.add_argument("--savemp3", action="store_true",
                         help="Save the audio recording alongside the transcript")
     parser.add_argument("--model", default=None,
                         choices=["tiny", "base", "small", "medium", "large"],
-                        help="Whisper model (default: small for --liveupdate, medium otherwise)")
+                        help="Whisper model (default: small for --liveupdate/--fast, medium otherwise)")
     parser.add_argument("--output", type=Path, default=DEFAULT_NOTES_DIR,
                         help=f"Directory to save notes (default: {DEFAULT_NOTES_DIR})")
     parser.add_argument("--silence", type=float, default=0.1,
                         help="RMS silence threshold (default: 0.1)")
-    parser.add_argument("--device", type=int, default=8,
-                        help="Audio input device index (run 'record --listdevices' to see options)")
+    def device_arg(value):
+        if value == tapaudio.DEVICE_NAME:
+            return value
+        return int(value)
+
+    parser.add_argument("--device", type=device_arg, default=8,
+                        help="Audio input device index (run 'record --listdevices' to see options), "
+                             f"or '{tapaudio.DEVICE_NAME}' to capture whatever is playing through your speakers "
+                             "(e.g. a browser tab or Zoom call) instead of the mic")
     parser.add_argument("--listdevices", action="store_true",
                         help="List available audio input devices and exit")
     parser.add_argument("--name", type=str, default=None,
@@ -55,6 +71,8 @@ def main():
     if args.listdevices:
         import sounddevice as sd
         print(sd.query_devices())
+        print(f"\n'{tapaudio.DEVICE_NAME}': capture desktop/tab audio instead of a mic "
+              "(pass --device tabaudio)")
         return
 
     if args.do_import:
@@ -67,11 +85,17 @@ def main():
     if args.transcribe:
         if args.model is None:
             args.model = "medium"
-        model = transcriber.load_model(args.model)
-        print(f"Transcribing {args.transcribe}...")
-        text = transcriber.transcribe_file(model, str(args.transcribe))
+        model = transcriber.load_model(args.model, quiet=args.quiet)
+        if not args.quiet:
+            print(f"Transcribing {args.transcribe}...")
+        trimmed_path, _ = trimmer.trim_silence_file(args.transcribe, quiet=args.quiet)
+        try:
+            text = transcriber.transcribe_file(model, str(trimmed_path), quiet=args.quiet)
+        finally:
+            if trimmed_path != Path(args.transcribe):
+                trimmed_path.unlink(missing_ok=True)
         print(text)
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        timestamp = datetime.fromtimestamp(args.transcribe.stat().st_mtime).strftime("%Y-%m-%d_%H-%M")
         args.output.mkdir(parents=True, exist_ok=True)
         _file_and_report(text, [], args, timestamp)
         return
@@ -81,8 +105,15 @@ def main():
         if args.continue_file is None:
             return
 
+    if args.record:
+        args.output.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+        rec = rec_module.AudioRecorder(silence_threshold=args.silence)
+        _run_record_only(rec, args, timestamp)
+        return
+
     if args.model is None:
-        args.model = "small" if args.liveupdate else "medium"
+        args.model = "small" if (args.liveupdate or args.fast) else "medium"
 
     args.output.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
@@ -94,7 +125,33 @@ def main():
     if args.liveupdate:
         _run_chunked(rec, model, args, timestamp, beam_size=1, context_len=100, live=True, vad_filter=True)
     else:
-        _run_chunked(rec, model, args, timestamp, beam_size=5, context_len=200, live=False, vad_filter=True)
+        beam_size = 1 if args.fast else 5
+        _run_chunked(rec, model, args, timestamp, beam_size=beam_size, context_len=200, live=False, vad_filter=True)
+
+
+def _run_record_only(rec, args, timestamp):
+    rec.start(device=args.device)
+    print("\nRecording... Press Ctrl+C to stop.\n")
+    try:
+        while True:
+            time.sleep(0.1)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        rec.stop()
+
+    audio = rec.get_all_audio()
+    if len(audio) < 1000:
+        print("No audio captured.")
+        return
+
+    name = args.name
+    folder = args.output / (name if name else "untagged")
+    folder.mkdir(parents=True, exist_ok=True)
+    stem = f"{timestamp}_{name}" if name else timestamp
+    saved = filer.save_audio(audio, folder / f"{stem}.wav")
+    print(f"Saved: {saved}")
+    print(f"Tip  : transcribe later with 'record --transcribe {saved}'")
 
 
 def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_filter=False):
@@ -103,8 +160,9 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
     offset_path = Path.home() / ".recordcli_offset"
     audio_chunks = []
 
-    current_path.unlink(missing_ok=True)
-    offset_path.write_text("0")
+    if live:
+        current_path.unlink(missing_ok=True)
+        offset_path.write_text("0")
 
     _PID_FILE.write_text(str(os.getpid()))
     signal.signal(signal.SIGUSR1, lambda sig, frame: rec_module.trigger_flush())
@@ -118,17 +176,19 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
     try:
         for chunk, manual in rec.iter_speech_chunks():
             audio_chunks.append(chunk)
-            text = transcriber.transcribe(model, chunk,
+            text, reliable = transcriber.transcribe(model, chunk,
                                           context=transcript_so_far[-context_len:],
                                           beam_size=beam_size,
                                           vad_filter=vad_filter)
             if text.strip():
                 line = text.strip() + " "
-                transcript_so_far += line
+                if reliable:
+                    transcript_so_far += line
                 with open(tmp_path, "a") as f:
                     f.write(line)
-                with open(current_path, "a") as f:
-                    f.write(line)
+                if live:
+                    with open(current_path, "a") as f:
+                        f.write(line)
                 print(text.strip(), end=" ", flush=True)
                 if live and manual:
                     _ping_claude()
@@ -139,7 +199,8 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
         _PID_FILE.unlink(missing_ok=True)
         remaining = rec.get_all_audio()
         if len(remaining) > 1000:
-            text = transcriber.transcribe(model, remaining,
+            audio_chunks.append(remaining)
+            text, _ = transcriber.transcribe(model, remaining,
                                           context=transcript_so_far[-context_len:],
                                           beam_size=beam_size,
                                           vad_filter=vad_filter)
@@ -147,12 +208,14 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
                 line = text.strip() + " "
                 with open(tmp_path, "a") as f:
                     f.write(line)
-                with open(current_path, "a") as f:
-                    f.write(line)
+                if live:
+                    with open(current_path, "a") as f:
+                        f.write(line)
                 print(text.strip(), end=" ", flush=True)
 
-    current_path.unlink(missing_ok=True)
-    offset_path.write_text("0")
+    if live:
+        current_path.unlink(missing_ok=True)
+        offset_path.write_text("0")
 
     print("\n" + "-" * 50)
 
@@ -200,11 +263,15 @@ def _run_import(args, quiet=False):
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp_path = Path(tmp.name)
 
+        trimmed_path = tmp_path
         try:
             gdrive.download_file(service, f["id"], tmp_path)
-            text = transcriber.transcribe_file(model, str(tmp_path), quiet=quiet)
+            trimmed_path, _ = trimmer.trim_silence_file(tmp_path, quiet=quiet)
+            text = transcriber.transcribe_file(model, str(trimmed_path), quiet=quiet)
         finally:
             tmp_path.unlink(missing_ok=True)
+            if trimmed_path != tmp_path:
+                trimmed_path.unlink(missing_ok=True)
 
         if not text.strip():
             log("  No speech detected, skipping.")
