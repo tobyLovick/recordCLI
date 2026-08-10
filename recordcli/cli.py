@@ -93,13 +93,14 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
     try:
         for chunk in rec.iter_speech_chunks():
             audio_chunks.append(chunk)
-            text = transcriber.transcribe(model, chunk,
+            text, reliable = transcriber.transcribe(model, chunk,
                                           context=transcript_so_far[-context_len:],
                                           beam_size=beam_size,
                                           vad_filter=vad_filter)
             if text.strip():
                 line = text.strip() + " "
-                transcript_so_far += line
+                if reliable:
+                    transcript_so_far += line
                 with open(tmp_path, "a") as f:
                     f.write(line)
                 with open(current_path, "a") as f:
@@ -111,7 +112,7 @@ def _run_chunked(rec, model, args, timestamp, beam_size, context_len, live, vad_
         rec.stop()
         remaining = rec.get_all_audio()
         if len(remaining) > 1000:
-            text = transcriber.transcribe(model, remaining,
+            text, _ = transcriber.transcribe(model, remaining,
                                           context=transcript_so_far[-context_len:],
                                           beam_size=beam_size,
                                           vad_filter=vad_filter)
